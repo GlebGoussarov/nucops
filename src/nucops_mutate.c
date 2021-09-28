@@ -2,6 +2,8 @@
 #include "sequence_base.h"
 #include "randgen.h"
 #include "vecops.h"
+#include "global_macros.h"
+
 
 args_t* nucops_mutate_init_args(int argc, char** argv) {
     args_t* result;
@@ -83,6 +85,9 @@ int nucops_mutate(int argc, char** argv) {
     args = nucops_mutate_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_mutate_prog(args);
         if (result != 0) {
             args_report_error(args, "Mutate failed with code <%d>\n", result);

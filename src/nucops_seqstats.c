@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include "osportstd.h"
 #include "sequence_base.h"
+#include "global_macros.h"
+
 
 int nucops_GC(int argc, char** argv){
   size_t A,C,G,T,N;

@@ -3,6 +3,8 @@
 #include "argparser.h"
 #include "sequence_base.h"
 #include "textparsing.h"
+#include "global_macros.h"
+
 
 args_t* nucops_fq2fa_init_args(int argc, char** argv) {
     args_t* result;
@@ -78,6 +80,9 @@ int nucops_fq2fa(int argc, char** argv) {
     args = nucops_fq2fa_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_fq2fa_a(args);
         if (result != 0) {
             args_report_error(args, "fq2fa failed with code <%d>\n", result);

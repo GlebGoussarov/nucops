@@ -1,5 +1,7 @@
 #include "argparser.h"
 #include "sequence_base.h"
+#include "global_macros.h"
+
 
 args_t* nucops_shorten_init_args(int argc, char** argv) {
     args_t* result;
@@ -78,6 +80,9 @@ int nucops_shorten(int argc, char** argv) {
     args = nucops_shorten_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_shorten_a(args);
         if (result != 0) {
             args_report_error(args, "Shorten failed with code <%d>\n", result);

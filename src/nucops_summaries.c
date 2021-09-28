@@ -4,6 +4,8 @@
 #include "sequence_base.h"
 #include "textparsing.h"
 #include "vecops.h"
+#include "global_macros.h"
+
 
 args_t* nucops_fastasummary_init_args(int argc, char** argv) {
     args_t* result;
@@ -15,13 +17,28 @@ args_t* nucops_fastasummary_init_args(int argc, char** argv) {
     args_add(result, "avglen", 'a', "");
     args_add(result, "medlen", 'e', "");
     args_add(result, "lenhistogram", 'H', "int");
-    args_add(result, "lenquantiles", 'Q', "int");
+    args_add(result, "lenquantiles", 'Q', "");
     args_add(result, "nseq", 'n', "");
     args_add(result, "totlen", 't', "");
     args_add(result, "GC", 'g', "");
     args_add(result, "Nxx", 'N', "int");
     args_add(result, "Lxx", 'L', "int");
+    args_add(result, "validnullinput", '0', "");
     args_add_help(result,NULL,"Positional argument","A single positional value is accepted, and should be the file name.", "treated as -i");
+    args_add_help(result, "input", "INPUT", "Used to specify the input file. Considers 'stdin' to be a stream - a file with this name will not be read.\nDefaults to stdin.", "input filename (default: stdin)");
+    args_add_help(result, "output", "OUTPUT", "Used to specify the output file. Considers 'stdout' and 'stderr' to be streams - a file will not be created when specifying either of these values.\nDefaults to stdout.", "input filename (default: stdout)");
+    args_add_help(result, "minlen", "MINIMAL SEQUENCE LENGTH", "Specify this argument to report the length of the shortest sequence in the file", "report minimal sequence length");
+    args_add_help(result, "maxlen", "MAXIMAL SEQUENCE LENGTH", "Specify this argument to report the length of the longest sequence in the file", "report maximal sequence length");
+    args_add_help(result, "avglen", "AVERAGE SEQUENCE LENGTH", "Specify this argument to report the average of the lengths of all sequences in the file", "report average sequence length");
+    args_add_help(result, "medlen", "MEDIAN SEQUENCE LENGTH", "Specify this argument to report the median of the lengths of all sequences in the file", "report median sequence length");
+    args_add_help(result, "lenhistogram", "SEQUENCE LENGTH HISTOGRAM", "Specify this argument to produce a histogram of sequence lengths, with the argument specifying the number of bins (default: 20)", "create sequence length histogram");
+    args_add_help(result, "lenquantiles", "SEQUENCE LENGTH QUANTILES", "Specify this argument to report sequence length quantiles, including 1%, 5%, 25%, 75%, 95%, and 99%.", "report sequence length quantiles");
+    args_add_help(result, "nseq", "NUMBER OF SEQUENCES", "Specify this argument to report the number of sequences in the file", "report sequence count");
+    args_add_help(result, "totlen", "TOTAL LENGTH OF SEQUENCES", "Specify this argument to report the sum of the lengths of all sequences in the file", "report total length");
+    args_add_help(result, "GC", "GC CONTENT", "Specify this argument to report the GC content", "report GC content");
+    args_add_help(result, "Nxx", "Nxx", "Report the length of the sequence for which it and all longer sequences represent the given percentage of the total sequence length.", "report Nxx statistic (e.g. N50)");
+    args_add_help(result, "Lxx", "Lxx", "Report the minimal number of sequences needed to represent the given percentage of the total sequence length", "report Lxx statistic (e.g. L50)");
+    args_add_help(result, "validnullinput", "NO ERROR ON NULL", "Specify this argument to produce output even when an invalid filename is supplied as input.\nAll values will be set to 0 in that case.", "report Lxx statistic (e.g. L50)");
     args_parse(result, argc, argv);
     return result;
 }
@@ -49,7 +66,9 @@ int nucops_fastasummary_a(args_t* args) {
     size_t curlen, binsize;
     int failure_code;
     int stdin_input;
+    int vni;
 
+    vni = args_ispresent(args, "validnullinput");
     stdin_input = 0;
     inputfn = args_getstr(args, "input", 0, args_getstr(args, NULL, 0, "stdin"));
     if (strcmp(inputfn,"stdin")==0){
@@ -96,8 +115,14 @@ int nucops_fastasummary_a(args_t* args) {
     f_in = NULL;
     f_out = NULL;
     if (!failure_code && PFopen(&f_in, inputfn, "rb")) {
-        args_report_error(NULL, "The input file could not be opened.\n");
-        failure_code = 1;
+        if (vni) {
+            args_report_info(NULL, "The input file could not be opened.\n");
+            vni = 2;
+        }
+        else{
+            args_report_error(NULL, "The input file could not be opened.\n");
+            failure_code = 1;
+        }
     }
 
     if (!failure_code && PFopen(&f_out, outputfn, "wb")) {
@@ -105,7 +130,7 @@ int nucops_fastasummary_a(args_t* args) {
         failure_code = 2;
     }
     inseqs = NULL;
-    if (!failure_code){
+    if ( (!failure_code) && vni != 2){
         args_report_info(NULL, "Input and output files successfully opened.\n");
         resume_at = 0;
         if(stdin_input){
@@ -125,88 +150,93 @@ int nucops_fastasummary_a(args_t* args) {
         minlen = 0;
         maxlen = 0;
         totlensum = 0;
-        do {
-            nseqtot += nseq;
-            args_report_progress(NULL, _LLD_ " sequences read\r", nseqtot);
-            curlen = contig_length(inseqs[0]);
-            if(minlen==0){
-                minlen = curlen;
-                maxlen = minlen;
-            }
-            A = C = G = T = N = 0;
-            if(_g || defaultprint){
+        if (vni != 2) {
+            do {
+                nseqtot += nseq;
+                args_report_progress(NULL, _LLD_ " sequences read\r", nseqtot);
+                curlen = contig_length(inseqs[0]);
+                if (minlen == 0) {
+                    minlen = curlen;
+                    maxlen = minlen;
+                }
+                A = C = G = T = N = 0;
+                if (_g || defaultprint) {
+                    for (i = 0;i < nseq;i++) {
+                        contig_countACGTN(inseqs[i], &tmp1, &tmp2, &tmp3, &tmp4, &tmp5);
+                        A += tmp1;
+                        C += tmp2;
+                        G += tmp3;
+                        T += tmp4;
+                        N += tmp5;
+                    }
+                }
+                totlen = 0;
                 for (i = 0;i < nseq;i++) {
-                    contig_countACGTN(inseqs[i],&tmp1,&tmp2,&tmp3,&tmp4,&tmp5);
-                    A += tmp1;
-                    C += tmp2;
-                    G += tmp3;
-                    T += tmp4;
-                    N += tmp5;
+                    curlen = contig_length(inseqs[i]);
+                    totlen += curlen;
+                    if (curlen > maxlen) maxlen = curlen;
+                    if (curlen < minlen) minlen = curlen;
+                    contig_free(inseqs[i]);
+                    all_lengths[curseqid] = (int64_t)curlen;
+                    curseqid++;
+                    if (curseqid == nalloclengths) {
+                        if (nalloclengths < 0x10000000) nalloclengths *= 2;
+                        else nalloclengths += 0x10000000;
+                        all_lengths = realloc(all_lengths, sizeof(int64_t)*nalloclengths);
+                    }
                 }
-            }
-            totlen = 0;
-            for (i = 0;i < nseq;i++) {
-                curlen = contig_length(inseqs[i]);
-                totlen += curlen;
-                if (curlen > maxlen) maxlen = curlen;
-                if (curlen < minlen) minlen = curlen;
-                contig_free(inseqs[i]);
-                all_lengths[curseqid] = (int64_t)curlen;
-                curseqid++;
-                if(curseqid == nalloclengths){
-                    if(nalloclengths < 0x10000000) nalloclengths*=2;
-                    else nalloclengths += 0x10000000;
-                    all_lengths = realloc(all_lengths, sizeof(int64_t)*nalloclengths);
+                totlensum += totlen;
+                if (inseqs)free(inseqs);
+                inseqs = NULL;
+                if (resume_at > 0)
+                    inseqs = contigs_from_fastxPF_limited(f_in, &nseq, 0xC0000000, &resume_at);
+            } while (resume_at > 0);
+            if (inseqs) {
+                nseqtot += nseq;
+                args_report_progress(NULL, _LLD_ " sequences read\r", nseqtot);
+                curlen = contig_length(inseqs[0]);
+                if (minlen == 0) {
+                    minlen = curlen;
+                    maxlen = minlen;
                 }
+                A = C = G = T = N = 0;
+                if (_g || defaultprint) {
+                    for (i = 0;i < nseq;i++) {
+                        contig_countACGTN(inseqs[i], &tmp1, &tmp2, &tmp3, &tmp4, &tmp5);
+                        A += tmp1;
+                        C += tmp2;
+                        G += tmp3;
+                        T += tmp4;
+                        N += tmp5;
+                    }
+                }
+                totlen = 0;
+                for (i = 0;i < nseq;i++) {
+                    curlen = contig_length(inseqs[i]);
+                    totlen += curlen;
+                    if (curlen > maxlen) maxlen = curlen;
+                    if (curlen < minlen) minlen = curlen;
+                    contig_free(inseqs[i]);
+                    all_lengths[curseqid] = (int64_t)curlen;
+                    curseqid++;
+                    if (curseqid == nalloclengths) {
+                        if (nalloclengths < 0x10000000) nalloclengths *= 2;
+                        else nalloclengths += 0x10000000;
+                        all_lengths = realloc(all_lengths, sizeof(int64_t)*nalloclengths);
+                    }
+                }
+                totlensum += totlen;
+                if (inseqs)free(inseqs);
             }
-            totlensum += totlen;
-            if(inseqs)free(inseqs);
             inseqs = NULL;
-            if(resume_at>0)
-                inseqs = contigs_from_fastxPF_limited(f_in, &nseq,0xC0000000, &resume_at);
-        } while(resume_at>0);
-        if (inseqs) {
-            nseqtot += nseq;
-            args_report_progress(NULL, _LLD_ " sequences read\r", nseqtot);
-            curlen = contig_length(inseqs[0]);
-            if (minlen == 0) {
-                minlen = curlen;
-                maxlen = minlen;
+            if (nseqtot != curseqid) {
+                args_report_warning(NULL, "Sequences were not properly counted, somehow...");
             }
-            A = C = G = T = N = 0;
-            if (_g || defaultprint) {
-                for (i = 0;i < nseq;i++) {
-                    contig_countACGTN(inseqs[i], &tmp1, &tmp2, &tmp3, &tmp4, &tmp5);
-                    A += tmp1;
-                    C += tmp2;
-                    G += tmp3;
-                    T += tmp4;
-                    N += tmp5;
-                }
-            }
-            totlen = 0;
-            for (i = 0;i < nseq;i++) {
-                curlen = contig_length(inseqs[i]);
-                totlen += curlen;
-                if (curlen > maxlen) maxlen = curlen;
-                if (curlen < minlen) minlen = curlen;
-                contig_free(inseqs[i]);
-                all_lengths[curseqid] = (int64_t)curlen;
-                curseqid++;
-                if (curseqid == nalloclengths) {
-                    if (nalloclengths < 0x10000000) nalloclengths *= 2;
-                    else nalloclengths += 0x10000000;
-                    all_lengths = realloc(all_lengths, sizeof(int64_t)*nalloclengths);
-                }
-            }
-            totlensum += totlen;
-            if (inseqs)free(inseqs);
+            args_report_progress(NULL, _LLD_ "\nFile read completely\n", nseqtot);
         }
-        inseqs = NULL;
-        if(nseqtot != curseqid){
-            args_report_warning(NULL,"Sequences were not properly counted, somehow...");
+        else {
+            N = 1;
         }
-        args_report_progress(NULL, _LLD_ "\nFile read completely\n", nseqtot);
         if (defaultprint) {
             PFprintf(f_out, "Shortest sequence:\t" _LLD_ "\n", (int64_t)minlen);
             PFprintf(f_out, "Longest sequence:\t" _LLD_ "\n", (int64_t)maxlen);
@@ -237,8 +267,8 @@ int nucops_fastasummary_a(args_t* args) {
             if (_n) { if (i)PFputc('\t', f_out); PFprintf(f_out, _LLD_, (int64_t)nseqtot);i = 1; }
             if (_g) { if (i)PFputc('\t', f_out); PFprintf(f_out, "%.4f", (double)(G+C)/(double)(A+G+C+T+N) );i = 1; }
             if (_a) { if (i)PFputc('\t', f_out); PFprintf(f_out, _LLD_, veci64_avg(all_lengths, nseqtot)); i = 1; }
-            if (_N || _L || _e || _h || _Q) {vec_sorti64(all_lengths,nseqtot);}
-            if (_e) { if (i)PFputc('\t', f_out); PFprintf(f_out, _LLD_, (all_lengths[nseqtot / 2] + all_lengths[(nseqtot + 1) / 2]) / 2); i = 1; }
+            if (_N || _L || _e || _h || _Q) { if(nseqtot>1)vec_sorti64(all_lengths,nseqtot);}
+            if (_e) { if (i)PFputc('\t', f_out); if (nseqtot > 0) PFprintf(f_out, _LLD_, (all_lengths[nseqtot / 2] + all_lengths[(nseqtot + 1) / 2]) / 2); else PFprintf(f_out, _LLD_, 0);  i = 1; }
             if (_N) {
                 curseqid = nseqtot;
                 curlen = 0;
@@ -253,9 +283,11 @@ int nucops_fastasummary_a(args_t* args) {
             if (_L) {
                 curseqid = nseqtot;
                 curlen = 0;
-                while(curlen < (totlensum * Lxx)/100 && curseqid > 0){
-                   curseqid--;
-                   curlen += all_lengths[curseqid];
+                if (nseqtot > 0) {
+                    while (curlen < (totlensum * Lxx) / 100 && curseqid > 0) {
+                        curseqid--;
+                        curlen += all_lengths[curseqid];
+                    }
                 }
                 if (i)PFputc('\t', f_out);
                 PFprintf(f_out, _LLD_ , (int64_t)(nseqtot-curseqid) );
@@ -263,7 +295,7 @@ int nucops_fastasummary_a(args_t* args) {
             }
             if (_h) {
                 if (i) PFputc('\n', f_out);
-                if (nseqtot > nbins) {
+                if (nseqtot > (unsigned int)nbins) {
                     minlen = all_lengths[(nseqtot) / nbins];
                     maxlen = all_lengths[(nseqtot * (nbins-1)) / nbins];
                     if (maxlen - minlen < nbins) {
@@ -287,9 +319,14 @@ int nucops_fastasummary_a(args_t* args) {
                 }
                 else {
                     binsize = 0;
-                    PFprintf(f_out, _LLD_ , all_lengths[0]);
-                    for (j = 1;j < nseqtot;j++) {
-                        PFprintf(f_out, "\t" _LLD_, all_lengths[j]);
+                    if (nseqtot > 0) {
+                        PFprintf(f_out, _LLD_, all_lengths[0]);
+                        for (j = 1;j < nseqtot;j++) {
+                            PFprintf(f_out, "\t" _LLD_, all_lengths[j]);
+                        }
+                    }
+                    else {
+                        PFprintf(f_out, _LLD_, 0);
                     }
                     PFprintf(f_out, "\n");
                 }
@@ -297,12 +334,22 @@ int nucops_fastasummary_a(args_t* args) {
             }
             if (_Q) {
                 if (i) PFputc('\n', f_out);
-                PFprintf(f_out, "P1\t" _LLD_, all_lengths[nseqtot / 100]);
-                PFprintf(f_out, "\nP5\t" _LLD_, all_lengths[nseqtot / 20]);
-                PFprintf(f_out, "\nQ1\t" _LLD_, all_lengths[nseqtot / 4]);
-                PFprintf(f_out, "\nQ3\t" _LLD_, all_lengths[(nseqtot * 3) / 4]);
-                PFprintf(f_out, "\nP95\t" _LLD_, all_lengths[(nseqtot*19) / 20]);
-                PFprintf(f_out, "\nP99\t" _LLD_, all_lengths[(nseqtot*99) / 100]);
+                if (nseqtot > 0) {
+                    PFprintf(f_out, "P1\t" _LLD_, all_lengths[nseqtot / 100]);
+                    PFprintf(f_out, "\nP5\t" _LLD_, all_lengths[nseqtot / 20]);
+                    PFprintf(f_out, "\nQ1\t" _LLD_, all_lengths[nseqtot / 4]);
+                    PFprintf(f_out, "\nQ3\t" _LLD_, all_lengths[(nseqtot * 3) / 4]);
+                    PFprintf(f_out, "\nP95\t" _LLD_, all_lengths[(nseqtot * 19) / 20]);
+                    PFprintf(f_out, "\nP99\t" _LLD_, all_lengths[(nseqtot * 99) / 100]);
+                }
+                else {
+                    PFprintf(f_out, "P1\t" _LLD_, 0);
+                    PFprintf(f_out, "\nP5\t" _LLD_, 0);
+                    PFprintf(f_out, "\nQ1\t" _LLD_, 0);
+                    PFprintf(f_out, "\nQ3\t" _LLD_, 0);
+                    PFprintf(f_out, "\nP95\t" _LLD_, 0);
+                    PFprintf(f_out, "\nP99\t" _LLD_, 0);
+                }
                 i = 1;
             }
 
@@ -323,6 +370,9 @@ int nucops_fastasummary(int argc, char** argv) {
     args = nucops_fastasummary_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_fastasummary_a(args);
         if (result != 0) {
             args_report_error(args, "Fastasummary failed with code <%d>\n", result);
@@ -345,6 +395,7 @@ args_t* nucops_seqsummary_init_args(int argc, char** argv) {
     args_add(result, "quality", 'q', "");
     args_add(result, "minquality", 'm', "");
     args_add(result, "maxquality", 'M', "");
+    args_add(result, "validnullinput", '0', "");
     args_add_help(result, NULL, "Positional argument", "A single positional value is accepted, and should be the file name.", "treated as -i");
     args_parse(result, argc, argv);
     return result;
@@ -364,7 +415,9 @@ int nucops_seqsummary_a(args_t* args) {
     int failure_code;
     int seemslike_fastq;
     int firstcol;
+    int vni;
     
+    vni = args_ispresent(args, "validnullinput");
     inputfn = args_getstr(args, "input", 0, args_getstr(args, NULL, 0, "stdin"));
     if (strcmp(inputfn, "stdin") == 0) {
         args_report_error(NULL, "Using stdin as input is not supported\n");
@@ -393,8 +446,13 @@ int nucops_seqsummary_a(args_t* args) {
     f_in = NULL;
     f_out = NULL;
     if (!failure_code && PFopen(&f_in, inputfn, "rb")) {
-        args_report_error(NULL, "The input file could not be opened.\n");
-        failure_code = 1;
+        if (!vni) {
+            args_report_error(NULL, "The input file could not be opened.\n");
+            failure_code = 1;
+        }
+        else {
+            vni = 2;
+        }
     }
     if (!failure_code && PFopen(&f_out, outputfn, "wb")) {
         args_report_error(NULL, "The output file could not be opened.\n");
@@ -402,9 +460,15 @@ int nucops_seqsummary_a(args_t* args) {
     }
     if (!failure_code) {
         seemslike_fastq = 0;
-        args_report_info(NULL, "Input and output files successfully opened.\n");
-        curcontig = contig_from_fastxPF(f_in);
-        if (contig_qscores(curcontig))seemslike_fastq = 1;
+        if (vni != 2) {
+            args_report_info(NULL, "Input and output files successfully opened.\n");
+            curcontig = contig_from_fastxPF(f_in);
+            if (contig_qscores(curcontig))seemslike_fastq = 1;
+        }
+        else {
+            args_rport_info(NULL, "Could not open input file, reporting stats for an empty sequence.\n");
+            curcontig = NULL;
+        }
         if (defaultprint && seemslike_fastq) {
             _m = 1;
             _M = 1;
@@ -569,6 +633,9 @@ int nucops_seqsummary(int argc, char** argv) {
     args = nucops_seqsummary_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_seqsummary_a(args);
         if (result != 0) {
             args_report_error(args, "Seqsummary failed with code <%d>\n", result);

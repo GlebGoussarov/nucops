@@ -16,6 +16,7 @@ typedef struct read_s read_s;
 contig_s* contig_alloc();
 void contig_free(contig_s* target);
 
+contig_s* contig_reverse_complement(contig_s* source);
 contig_s* contig_from_str(char* src, char* name, int fmt);
 contig_s* contig_from_fastaPF(PF_t* src);
 contig_s* contig_from_fastxPF(PF_t* src);

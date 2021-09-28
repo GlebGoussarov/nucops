@@ -6,6 +6,7 @@
 #include "textparsing.h"
 #include <string.h>
 #include <stdio.h>
+#include "global_macros.h"
 
 args_t* nucops_compliance_init_args(int argc, char** argv) {
     args_t* result;

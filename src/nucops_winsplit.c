@@ -4,6 +4,8 @@
 #include "textparsing.h"
 #include <math.h>
 #include <string.h>
+#include "global_macros.h"
+
 
 args_t* nucops_winsplit_init_args(int argc, char** argv) {
     args_t* result;
@@ -89,6 +91,9 @@ int nucops_winsplit(int argc, char** argv) {
 
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         if (args_ispresent(args, "progressive")) {
             result = nucops_winsplit_p(args);
         }

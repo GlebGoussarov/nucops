@@ -3,6 +3,8 @@
 #include "sequence_base.h"
 #include <string.h>
 #include "textparsing.h"
+#include "global_macros.h"
+
 
 args_t* nucops_renameseq_init_args(int argc, char** argv) {
     args_t* result;
@@ -467,6 +469,9 @@ int nucops_renameseqs(int argc, char** argv) {
     args = nucops_renameseq_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         if (args_ispresent(args, "keywords")) {
             result = nucops_renameseq_b(args);
         }

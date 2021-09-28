@@ -7,6 +7,8 @@
 #include "vecops.h"
 #include "datamap.h"
 #include "textparsing.h"
+#include "global_macros.h"
+
 
 args_t* nucops_select_init_args(int argc, char** argv) {
     args_t* result;
@@ -33,6 +35,7 @@ args_t* nucops_select_init_args(int argc, char** argv) {
     args_add(result, "ignore_suffix", 'p', "");
     args_add(result, "random_seed", 'r', "int");
     args_add(result, "sequence_list", 'e', "str");
+    args_add(result, "fragment", 'f', "str,int,int");
     
     args_parse(result, argc, argv);
     return result;
@@ -41,6 +44,7 @@ args_t* nucops_select_init_args(int argc, char** argv) {
 int nucops_select_a(args_t* args) {
     contig_s** contigs;
     contig_s** hashed_contigs;
+    contig_s* tmpcontig;
     randgen_s* rng;
     DM64_t* nameset;
     char* inputfn;
@@ -75,7 +79,8 @@ int nucops_select_a(args_t* args) {
     int ignore_suffix;
     long long randomseed;
     size_t count;
-    
+    char* fragment_sequence;
+    int64_t fragment_start, fragment_end;
     args_report_info(NULL, "nucops select is now runnning\n");
 
     inputfn = args_getstr(args, "input", 0, "stdin");
@@ -126,6 +131,14 @@ int nucops_select_a(args_t* args) {
         args_report_error(NULL, "Cannot use the same file (%s) in multiple arguments\n");
         randgen_free(rng);
         return 1;
+    }
+
+    fragment_sequence = args_getstr(args, "fragment", 0, NULL);
+    fragment_start = fragment_end = -1;
+    if (fragment_sequence) {
+        fragment_start = args_getint(args, "fragment", 0, -1);
+        fragment_end = args_getint(args, "fragment", 1, -1);
+        if (!name_contains)name_contains = fragment_sequence;
     }
     
     args_report_info(NULL,"Arguments were parsed sucessfully\n");
@@ -288,13 +301,53 @@ int nucops_select_a(args_t* args) {
             for (i = 0; i < ncontigs;i++) {
                 if (contigs[i]) {
                     if ( ((strstr(contig_nameptr(contigs[i]),name_contains)==NULL)?1:0) != inverse_select) {
-                        contig_free(contigs[i]);
-                        contigs[i] = NULL;
-                        count++;
+                        if (fragment_sequence==NULL || strstr(contig_nameptr(contigs[i]), fragment_sequence) == NULL) {
+                            contig_free(contigs[i]);
+                            contigs[i] = NULL;
+                            count++;
+                        }
                     }
                 }
             }
             args_report_info(NULL, _LLD_ " sequences with names not containing target string removed\n", (long long)count);
+        }
+        if (fragment_sequence) {
+            count = 0;
+            args_report_info(NULL, "Looking for target fragment: in contig %s [" _LLD_ ":" _LLD_ "[\n", fragment_sequence, fragment_start, fragment_end);
+            for (i = 0; i < ncontigs;i++) {
+                if (contigs[i]) {
+                    if (strstr(contig_nameptr(contigs[i]), fragment_sequence) != NULL) {
+                        if (fragment_start == -1) fragment_start = 0;
+                        if (fragment_end == -1) fragment_end = contig_length(contigs[i]);
+                        if ( ((size_t)fragment_start) > contig_length(contigs[i])) fragment_start = contig_length(contigs[i]);
+                        if ( ((size_t)fragment_end) > contig_length(contigs[i])) fragment_end = (int64_t)contig_length(contigs[i]);
+                        if (fragment_end == fragment_start) {
+                            contig_free(contigs[i]);
+                            contigs[i] = NULL;
+                        }
+                        else {
+                            count = 1;
+                            if (fragment_end < fragment_start) {
+                                tmpval = fragment_end;
+                                fragment_end = fragment_start;
+                                fragment_start = tmpval;
+                                count = 2;
+                            }
+                            tmpcontig = contigs[i];
+                            contigs[i] = contig_subsection(tmpcontig, (size_t)fragment_start, (size_t)(fragment_end-fragment_start));
+                            args_report_info(NULL, "Found target fragment: in contig %s [" _LLD_ ":" _LLD_ "[\n", contig_nameptr(tmpcontig),fragment_start,fragment_end);
+                            contig_rename(contigs[i],"selected_fragment");
+                            contig_free(tmpcontig);
+                            if (count == 2) {
+                                tmpcontig = contigs[i];
+                                contigs[i] = contig_reverse_complement(tmpcontig);
+                                contig_free(tmpcontig);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }    
         }
         j = 0;
         for (i = 0;i < ncontigs;i++) {
@@ -518,6 +571,9 @@ int nucops_select(int argc, char** argv) {
     args = nucops_select_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_select_a(args);
         if (result != 0) {
             args_report_error(args, "splitfile failed with code <%d>\n", result);
@@ -896,6 +952,9 @@ int nucops_splitfile(int argc, char** argv) {
     args = nucops_splitfile_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_splitfile_a(args);
         if (result != 0) {
             args_report_error(args, "splitfile failed with code <%d>\n", result);

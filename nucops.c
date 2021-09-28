@@ -14,10 +14,9 @@
 #include "nucops_samcov.h"
 
 #ifndef _DEBUG
+
 int main(int argc, char** argv) {
     char* alt_args[2];
-    fprintf(stderr, "This is nucops v0.1.0\n");
-    fprintf(stderr, "This software is still under development. It may contain bugs, and help is not available most most options\n");
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <command> [options]\n", argv[0]);
         fprintf(stderr, "Available commands are: 'complies', 'concat', 'select', 'winsplit', 'fastasummary', 'fq2fa', 'seqsummary', 'samcov'\n\n");

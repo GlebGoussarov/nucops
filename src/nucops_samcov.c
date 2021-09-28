@@ -4,6 +4,8 @@
 #include "argparser.h"
 #include "datamap.h"
 #include <string.h>
+#include "global_macros.h"
+
 
 int SAMFLAG_multi(int x) { return ((x & 1) != 0); }
 int SAMFLAG_aligned(int x) { return ((x & 2) != 0); }
@@ -107,7 +109,8 @@ args_t* nucops_samcov_init_args(int argc, char** argv) {
     args_add(result, "output", 'o', "str");
     args_add(result, "bowtie", 'b', "");
     args_add(result, "detailed", 'd', "");
-    args_add(result, "separator", ' ', "str");
+    args_add(result, "covdist", 'c', "float");
+    args_add(result, "separator", 0, "str");
 
     args_add_help(result, "input", "INPUT FILE(S)", "To be used instead of or in conjunction with --ref and --sam. If the --sam flag is present, then The first value is the name of the sam file and the second is the name of the reference. Otherwise, it becomes an alias for --ref.", "Specify input file(s)");
     args_add_help(result, "sam", "SAM FILE", "Specify the name of the SAM file to be analysed", "Specify the SAM file");
@@ -116,6 +119,7 @@ args_t* nucops_samcov_init_args(int argc, char** argv) {
     args_add_help(result, "bowtie", "BOWTIE-COMPATIBLE MODE", "Bowtie doesn't produce files which conform to the SAM specification. In this mode, it is not possible to compute error rates, but what is computed should correspond to reality.", "bowtie-compatible-mode");
     args_add_help(result, "detailed", "DETAILED ERROR PROFILE", "Output the detailed error profile. Currently limited to outputting all SNPs.", "Output detailed error profile");
     args_add_help(result, "separator", "CHOICE OF SEPARATOR", "specify which format should be used. Currently,  only 'tsv' and 'csv' are valid inputs", "Specify output format ('tsv' or 'csv')");
+    args_add_help(result, "covdist", "COVERAGE DISTRIBUTION", "When this flag is present, samcov will compute ", "Specify output format ('tsv' or 'csv')");
     args_parse(result, argc, argv);
     return result;
 }
@@ -131,12 +135,17 @@ int nucops_samcov_a(args_t* args) {
     contig_s** contigs;
     contig_s* query_seq;
     contig_s* reference_seq;
-    size_t i,j,j0,ncontigs;
+    size_t i,j,j0,x,x0,xmax,ncontigs;
     int unparsedi,unparsedu;
     int err;
     DM64_t* dm;
     int btmode;
     int nf;
+    float curcov;
+    size_t* covdist;
+    float covdist_binw;
+    size_t ncdstalloc;
+    uint64_t bpcount;
     
     char* refseqname;
     char* cigar;
@@ -264,6 +273,7 @@ int nucops_samcov_a(args_t* args) {
         i = 0;
         args_report_progress(args, "Parsing SAM\n", (int64_t)i);
         M = I = D = R = Mtot = Itot = Dtot = Rtot = 0;
+        bpcount = 0;
         while (line = PFreadline(samfile)) {
             if (line[0] != '@') {
                 j0 = 0;
@@ -353,8 +363,9 @@ int nucops_samcov_a(args_t* args) {
                     contig_add_read(reference_seq, readrange[0], readrange[1]);
                     if (query_seq)contig_free(query_seq);
                 }
+                bpcount += (uint64_t)seqlen;
                 i++;
-                if (i % 1000 == 0) {
+                if (bpcount % 10000000 == 0) {
                     args_report_progress(args, "SAM contained " _LLD_ " sequences\r", (int64_t)i);
                 }
             }
@@ -412,6 +423,38 @@ int nucops_samcov_a(args_t* args) {
             PFprintf(output, "ins.G%c" _LLD_ "\n", separator, error_profile.insG);
             PFprintf(output, "ins.T%c" _LLD_ "\n", separator, error_profile.insT);
         }
+        if (args_ispresent(args, "covdist")) {
+            covdist_binw = (float) args_getdouble(args, "covdist", 0, 1.0);
+            if (covdist_binw < 1) {
+                covdist_binw = 1;
+            }
+            ncdstalloc = (size_t)( (((double)Tsum) / ((double)totlen)) * 2 / covdist_binw);
+
+            covdist = calloc(ncdstalloc, sizeof(size_t));
+            xmax = 0;
+            for (i = 0;i < ncontigs;i++) {
+                j = contig_length(contigs[i]);
+                for (j0 = 0;j0 < j;j0++) {
+                    curcov = contig_position_coverage(contigs[i], j0);
+                    x = (size_t)(curcov / covdist_binw);
+                    if (x >= ncdstalloc) {
+                        xmax = x + 2;
+                        covdist = realloc(covdist, xmax * sizeof(size_t));
+                        for (x0 = ncdstalloc;x0 < xmax;x0++) {
+                            covdist[x0] = 0;
+                        }
+                        ncdstalloc = xmax;
+                        xmax -= 2;
+                    }
+                    if ( x > xmax)xmax = x;
+                    covdist[x] += 1;
+                }
+            }
+            for (x = 0;x < xmax;x++) {
+                PFprintf(output, "cov [%.3f:%.3f[%c" _LLD_ "\n",((float)x)*covdist_binw, ((float)(x+1))*covdist_binw,separator, covdist[x]);
+            }
+            free(covdist);
+        }
     }
     for (i = 0;i < ncontigs;i++) {
         contig_free(contigs[i]);
@@ -431,6 +474,9 @@ int nucops_samcov(int argc, char** argv) {
     args = nucops_samcov_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_samcov_a(args);
         if (result != 0) {
             args_report_error(args, "samcov failed with code <%d>\n", result);
