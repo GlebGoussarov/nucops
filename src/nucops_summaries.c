@@ -466,7 +466,7 @@ int nucops_seqsummary_a(args_t* args) {
             if (contig_qscores(curcontig))seemslike_fastq = 1;
         }
         else {
-            args_rport_info(NULL, "Could not open input file, reporting stats for an empty sequence.\n");
+            args_report_info(NULL, "Could not open input file, reporting stats for an empty sequence.\n");
             curcontig = NULL;
         }
         if (defaultprint && seemslike_fastq) {
