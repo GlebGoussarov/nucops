@@ -162,6 +162,9 @@ int nucops_select_a(args_t* args) {
                 free(line);
             }
         }
+        else {
+            args_report_warning(NULL, "Sequence list could not be opened!\n");
+        }
         nselect_target = (int64_t)count;
         if (nselect_target == 0) {
             args_report_warning(NULL, "Sequence list is empty!\n");
