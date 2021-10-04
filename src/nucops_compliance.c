@@ -597,6 +597,9 @@ int nucops_compliance(int argc, char** argv) {
     args = nucops_compliance_init_args(argc, argv);
     result = 0;
     if (!args_ispresent(args, "help")) {
+        if (!args_ispresent(args, "quiet")) {
+            NUCOPS_HEADER
+        }
         result = nucops_compliance_a(args);
         if (result != 0) {
             args_report_error(args, "Compliance failed with code <%d>\n", result);

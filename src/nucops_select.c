@@ -81,6 +81,7 @@ int nucops_select_a(args_t* args) {
     size_t count;
     char* fragment_sequence;
     int64_t fragment_start, fragment_end;
+    int64_t nselect_target;
     args_report_info(NULL, "nucops select is now runnning\n");
 
     inputfn = args_getstr(args, "input", 0, "stdin");
@@ -150,6 +151,7 @@ int nucops_select_a(args_t* args) {
     lastUID = 0;
 
     nameset = NULL;
+    nselect_target = -1;
     if (hasseqlist) {
         nameset = new_DM64(DM_ALGORITHM_BASICSORTEDLIST, 0);
         count = 0;
@@ -159,6 +161,10 @@ int nucops_select_a(args_t* args) {
                 count++;
                 free(line);
             }
+        }
+        nselect_target = (int64_t)count;
+        if (nselect_target == 0) {
+            args_report_warning(NULL, "Sequence list is empty!\n");
         }
         PFclose(names);
     }
@@ -410,8 +416,11 @@ int nucops_select_a(args_t* args) {
         passid++;
         free(contigs);
     } while(resume_at != 0);
-    if (totalcontigs == 0) {
-        args_report_warning(NULL, "No contigs match selection criteria!");
+    if (totalcontigs == 0 && nselect_target!=0) {
+        args_report_warning(NULL, "No contigs match selection criteria!\n");
+    }
+    else if (nselect_target > 0 && totalcontigs != nselect_target) {
+        args_report_warning(NULL, "Some of the specified contig names were not found.\n");
     }
     if (genomefrac > 0 && (genomefrac != 1 || fractype == 1)) {
         args_report_info(NULL,"Final number of contigs: " _LLD_ "\n", totalcontigs);
