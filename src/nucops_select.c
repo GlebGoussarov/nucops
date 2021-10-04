@@ -141,6 +141,14 @@ int nucops_select_a(args_t* args) {
         fragment_end = args_getint(args, "fragment", 1, -1);
         if (!name_contains)name_contains = fragment_sequence;
     }
+    if (hasseqlist) {
+        if (strcmp(seqlistfn, inputfn)==0) {
+            args_report_error(NULL,"Input file name cannot be the same as the sequence id list!\n");
+            randgen_free(rng);
+            return 1;
+        }
+    }
+    
     
     args_report_info(NULL,"Arguments were parsed sucessfully\n");
     
