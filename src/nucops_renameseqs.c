@@ -203,6 +203,9 @@ int nucops_renameseq_a(args_t* args) {
             else if (strcmp(tmpstr2, "pacbio3") == 0) {
                 kwid = 12;
             }
+            else if (strcmp(tmpstr2, "strictname") == 0) {
+                kwid = 13;
+            }
             else {
                 args_report_info(NULL, "Invalid keyword %s\n", tmpstr2);
                 ninvalid++;
@@ -371,6 +374,24 @@ int nucops_renameseq_a(args_t* args) {
                             tmpstr2[k] = 0;
                             j = k;
                             break;
+                        case 13:
+                            j = strlen(contig_nameptr(contig));
+                            if (j + 1 >= nalloc2) {
+                                nalloc2 = j + 2;
+                                tmpstr2 = realloc(tmpstr2, nalloc2);
+                            }
+                            memcpy(tmpstr2, contig_nameptr(contig), j);
+                            tmpstr2[j] = 0;
+                            if (kwid == 2) {
+                                jmax = j;
+                                for (j = 0;j < jmax;j++) {
+                                    if (tmpstr2[j] >= '0' && tmpstr2[j] <= '9') continue;
+                                    if (tmpstr2[j] >= 'a' && tmpstr2[j] <= 'z') continue;
+                                    if (tmpstr2[j] >= 'A' && tmpstr2[j] <= 'Z') continue;
+                                    tmpstr2[j] = '_';
+                                }
+                            }
+                            break;
                         default:
                             tmpstr2[0] = 0;
                             j = 0;
@@ -428,6 +449,7 @@ int nucops_renameseq_b(args_t* args) {
         PFprintf(f, "   name       the original name of the sequence\n");
         PFprintf(f, "   _name_     the original name of the sequence with ' ' replaced by '_'\n");
         PFprintf(f, "   .name.     the original name of the sequence with ' ' replaced by '.'\n");
+        PFprintf(f, "   strictname the original name of the sequence with non-alphanumeric characters replaced by '_'\n");
         PFprintf(f, "   prefix     the first word (until the first ' ') of original sequence name\n");
         PFprintf(f, "   suffix     the  original sequence name except the first word\n");
         PFprintf(f, "   id         the id of the sequence - ids are assiged to each sequence according\n");
