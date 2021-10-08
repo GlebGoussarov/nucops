@@ -382,14 +382,12 @@ int nucops_renameseq_a(args_t* args) {
                             }
                             memcpy(tmpstr2, contig_nameptr(contig), j);
                             tmpstr2[j] = 0;
-                            if (kwid == 2) {
-                                jmax = j;
-                                for (j = 0;j < jmax;j++) {
-                                    if (tmpstr2[j] >= '0' && tmpstr2[j] <= '9') continue;
-                                    if (tmpstr2[j] >= 'a' && tmpstr2[j] <= 'z') continue;
-                                    if (tmpstr2[j] >= 'A' && tmpstr2[j] <= 'Z') continue;
-                                    tmpstr2[j] = '_';
-                                }
+                            jmax = j;
+                            for (j = 0;j < jmax;j++) {
+                                if (tmpstr2[j] >= '0' && tmpstr2[j] <= '9') continue;
+                                if (tmpstr2[j] >= 'a' && tmpstr2[j] <= 'z') continue;
+                                if (tmpstr2[j] >= 'A' && tmpstr2[j] <= 'Z') continue;
+                                tmpstr2[j] = '_';
                             }
                             break;
                         default:
